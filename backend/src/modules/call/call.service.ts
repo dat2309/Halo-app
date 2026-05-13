@@ -62,29 +62,48 @@ export class CallService {
       .exec();
   }
 
+  /**
+   * Mark a session ended and insert a system-style message in the chat
+   * thread. Returns the inserted summary so the socket layer can emit
+   * `chat:message` + `chat:conversation_updated` to both participants
+   * (real-time update without requiring the client to refetch).
+   *
+   * If a session is still 'ringing' when 'ended' arrives, it's effectively
+   * a missed call (callee never picked up) — promote the reason to 'missed'.
+   */
   async markEnded(
     id: string,
     reason: "ended" | "declined" | "aborted" | "missed"
-  ) {
+  ): Promise<{
+    session: CallSessionDocument | null;
+    summary: Awaited<ReturnType<typeof this.chatService.sendMessage>> | null;
+  }> {
+    const existing = await this.callSessionModel.findById(id).exec();
+    if (!existing) return { session: null, summary: null };
+
+    // ringing → ended ≡ missed
+    const finalReason: "ended" | "declined" | "aborted" | "missed" =
+      reason === "ended" && existing.status === "ringing" ? "missed" : reason;
+
     const session = await this.callSessionModel
       .findByIdAndUpdate(
         id,
-        { status: reason, endedAt: new Date() },
+        { status: finalReason, endedAt: new Date() },
         { new: true }
       )
       .exec();
-    if (session) {
-      // Insert a system-style message into the corresponding 1-1 conversation
-      // so the chat thread shows the call in-context.
-      await this.insertCallSummaryMessage(session, reason);
-    }
-    return session;
+    if (!session) return { session: null, summary: null };
+
+    const summary = await this.insertCallSummaryMessage(session, finalReason);
+    return { session, summary };
   }
 
   private async insertCallSummaryMessage(
     session: CallSessionDocument,
     reason: "ended" | "declined" | "aborted" | "missed"
-  ) {
+  ): Promise<Awaited<
+    ReturnType<typeof this.chatService.sendMessage>
+  > | null> {
     try {
       const callerId = session.callerId.toString();
       const calleeId = session.calleeId.toString();
@@ -109,7 +128,7 @@ export class CallService {
         callerId,
         calleeId,
       });
-      await this.chatService.sendMessage({
+      return await this.chatService.sendMessage({
         conversationId: conv._id.toString(),
         senderId: callerId,
         type: "text",
@@ -117,12 +136,16 @@ export class CallService {
       });
     } catch {
       // Don't let chat insertion break call lifecycle
+      return null;
     }
   }
 
-  async abortActiveCallsForUser(
-    userId: string
-  ): Promise<CallSessionDocument[]> {
+  async abortActiveCallsForUser(userId: string): Promise<
+    {
+      session: CallSessionDocument;
+      summary: Awaited<ReturnType<typeof this.chatService.sendMessage>> | null;
+    }[]
+  > {
     const userObj = new Types.ObjectId(userId);
     const active = await this.callSessionModel
       .find({
@@ -135,11 +158,15 @@ export class CallService {
       { _id: { $in: active.map((s) => s._id) } },
       { $set: { status: "aborted", endedAt: new Date() } }
     );
-    // Insert summary for each aborted session
+    const results: {
+      session: CallSessionDocument;
+      summary: Awaited<ReturnType<typeof this.chatService.sendMessage>> | null;
+    }[] = [];
     for (const s of active) {
-      await this.insertCallSummaryMessage(s, "aborted");
+      const summary = await this.insertCallSummaryMessage(s, "aborted");
+      results.push({ session: s, summary });
     }
-    return active;
+    return results;
   }
 
   async historyForUser(userId: string, limit = 30) {

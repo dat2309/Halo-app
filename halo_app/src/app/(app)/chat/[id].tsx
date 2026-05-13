@@ -202,30 +202,29 @@ export default function ChatThread() {
         const mine = item.senderId === meId;
         const callSummary = parseCallSummary(item.content);
 
-        // System bubble for call summary
+        // Call summary rendered as a regular message bubble — `senderId` is the
+        // caller, so mine/theirs follows the same rule as text messages.
         if (callSummary) {
-            const iAmCaller = callSummary.callerId === meId;
-            const outgoing = iAmCaller;
             const missed = callSummary.reason === 'missed';
             const declined = callSummary.reason === 'declined';
             const aborted = callSummary.reason === 'aborted';
             const completed = callSummary.reason === 'ended';
-            const iconColor = missed
-                ? '#ef4444'
-                : declined
-                  ? '#ef4444'
-                  : '#facc15';
+            const prev = messages[index + 1];
+            const nextSameSender =
+                index > 0 && messages[index - 1].senderId === item.senderId;
+            const prevSameSender = prev && prev.senderId === item.senderId;
+
             const label = missed
-                ? outgoing
+                ? mine
                     ? translate('call.summary_missed_outgoing')
                     : translate('call.summary_missed_incoming')
                 : declined
-                  ? outgoing
+                  ? mine
                       ? translate('call.summary_declined_outgoing')
                       : translate('call.summary_declined_incoming')
                   : aborted
                     ? translate('call.summary_aborted')
-                    : outgoing
+                    : mine
                       ? translate('call.summary_outgoing')
                       : translate('call.summary_incoming');
             const formattedDuration = completed
@@ -233,9 +232,36 @@ export default function ChatThread() {
                       callSummary.durationSec % 60
                   ).padStart(2, '0')}`
                 : '';
+
+            // Icon tint: red for missed/declined, otherwise inherits bubble fg
+            const dangerous = missed || declined;
+            const iconColor = dangerous
+                ? '#ef4444'
+                : mine
+                  ? '#000'
+                  : '#facc15';
+
             return (
-                <View className="px-3 mt-3 items-center">
-                    <View className="flex-row items-center gap-2 px-3 py-2 rounded-2xl bg-neutral-100 dark:bg-neutral-800">
+                <View
+                    className={`px-3 ${mine ? 'items-end' : 'items-start'} ${
+                        nextSameSender ? 'mt-0.5' : 'mt-3'
+                    }`}
+                >
+                    <View
+                        className={`flex-row items-center gap-2 max-w-[78%] px-3 py-2 ${
+                            mine
+                                ? 'bg-yellow-400 rounded-2xl'
+                                : 'bg-neutral-200 dark:bg-neutral-800 rounded-2xl'
+                        } ${
+                            mine
+                                ? prevSameSender
+                                    ? 'rounded-br-md'
+                                    : ''
+                                : prevSameSender
+                                  ? 'rounded-bl-md'
+                                  : ''
+                        }`}
+                    >
                         <Ionicons
                             name={
                                 callSummary.mode === 'audio' ? 'call' : 'videocam'
@@ -243,7 +269,11 @@ export default function ChatThread() {
                             size={16}
                             color={iconColor}
                         />
-                        <Text className="text-xs text-neutral-700 dark:text-neutral-200">
+                        <Text
+                            className={`text-sm ${
+                                mine ? 'text-black' : 'text-gray-900 dark:text-white'
+                            } ${dangerous ? 'font-semibold' : ''}`}
+                        >
                             {label}
                             {formattedDuration}
                         </Text>

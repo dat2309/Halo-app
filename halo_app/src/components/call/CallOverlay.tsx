@@ -52,6 +52,7 @@ export function CallOverlay() {
     isCameraOff,
     peerMuted,
     peerCameraOff,
+    peerSharingScreen,
     callDurationSec,
     quality,
     speakerOn,
@@ -131,8 +132,14 @@ export function CallOverlay() {
 
   const peerLabel = peer?.name ?? peer?.username ?? '';
   const isVideo = mode === 'video';
+  // Render remote video if peer has any kind of video active — camera or
+  // screen share. When camera is off but screen share is on, we still want
+  // to render frames.
   const showRemoteVideo =
-    isVideo && remoteStreamURL && status === 'active' && !peerCameraOff;
+    isVideo &&
+    remoteStreamURL &&
+    status === 'active' &&
+    (!peerCameraOff || peerSharingScreen);
   const showLocalSelfView =
     isVideo &&
     localStreamURL &&
@@ -148,7 +155,9 @@ export function CallOverlay() {
             key={remoteStreamURL}
             streamURL={remoteStreamURL}
             style={StyleSheet.absoluteFillObject}
-            objectFit="cover"
+            // When peer is sharing screen, use "contain" so the whole
+            // presentation/window fits without cropping
+            objectFit={peerSharingScreen ? 'contain' : 'cover'}
             mirror={false}
             zOrder={0}
           />
@@ -212,6 +221,9 @@ export function CallOverlay() {
               </Text>
               {peerMuted ? (
                 <Ionicons name="mic-off" size={16} color="#ef4444" />
+              ) : null}
+              {peerSharingScreen ? (
+                <Ionicons name="desktop-outline" size={16} color="#facc15" />
               ) : null}
             </View>
           </View>

@@ -49,6 +49,7 @@ type CallContextValue = {
   isSharingScreen: boolean;
   peerMuted: boolean;
   peerCameraOff: boolean;
+  peerSharingScreen: boolean;
   callDurationSec: number;
   quality: CallQuality;
   error: string | null;
@@ -91,6 +92,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isSharingScreen, setIsSharingScreen] = useState(false);
   const [peerMuted, setPeerMuted] = useState(false);
   const [peerCameraOff, setPeerCameraOff] = useState(false);
+  const [peerSharingScreen, setPeerSharingScreen] = useState(false);
   const [callDurationSec, setCallDurationSec] = useState(0);
   const [quality, setQuality] = useState<CallQuality>('unknown');
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +158,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setIsSharingScreen(false);
     setPeerMuted(false);
     setPeerCameraOff(false);
+    setPeerSharingScreen(false);
     setCallDurationSec(0);
     setQuality('unknown');
     pendingIceRef.current = [];
@@ -415,7 +418,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [cleanup]);
 
   const emitTrackState = useCallback(
-    (next: { muted: boolean; cameraOff: boolean }) => {
+    (next: {
+      muted: boolean;
+      cameraOff: boolean;
+      isSharingScreen: boolean;
+    }) => {
       const sid = callSessionIdRef.current;
       const socket = getSocket();
       if (!sid || !socket) return;
@@ -430,8 +437,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const newMuted = !isMuted;
     s.getAudioTracks().forEach((t) => (t.enabled = !newMuted));
     setIsMuted(newMuted);
-    emitTrackState({ muted: newMuted, cameraOff: isCameraOff });
-  }, [isMuted, isCameraOff, emitTrackState]);
+    emitTrackState({
+      muted: newMuted,
+      cameraOff: isCameraOff,
+      isSharingScreen,
+    });
+  }, [isMuted, isCameraOff, isSharingScreen, emitTrackState]);
 
   const toggleCamera = useCallback(() => {
     const s = localStreamRef.current;
@@ -439,8 +450,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const newOff = !isCameraOff;
     s.getVideoTracks().forEach((t) => (t.enabled = !newOff));
     setIsCameraOff(newOff);
-    emitTrackState({ muted: isMuted, cameraOff: newOff });
-  }, [isCameraOff, isMuted, emitTrackState]);
+    emitTrackState({
+      muted: isMuted,
+      cameraOff: newOff,
+      isSharingScreen,
+    });
+  }, [isCameraOff, isMuted, isSharingScreen, emitTrackState]);
 
   /**
    * Replace the outgoing video track with a screen capture (getDisplayMedia).
@@ -465,15 +480,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (!screenTrack) return;
         await videoSender.replaceTrack(screenTrack);
         setIsSharingScreen(true);
+        emitTrackState({
+          muted: isMuted,
+          cameraOff: isCameraOff,
+          isSharingScreen: true,
+        });
         screenTrack.onended = async () => {
-          // User stopped sharing via browser UI
+          // User stopped sharing via browser UI (the "Stop sharing" pill)
           const cam = cameraVideoTrackRef.current;
           if (cam) await videoSender.replaceTrack(cam);
           setIsSharingScreen(false);
           screenStreamRef.current = null;
+          emitTrackState({
+            muted: isMuted,
+            cameraOff: isCameraOff,
+            isSharingScreen: false,
+          });
         };
       } catch (e: any) {
-        console.warn('[Call] screen share canceled/failed', e?.message);
+        // User cancelled the picker — not an error
+        console.log('[Call] screen share canceled/failed:', e?.message);
       }
     } else {
       const cam = cameraVideoTrackRef.current;
@@ -483,8 +509,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         screenStreamRef.current = null;
       }
       setIsSharingScreen(false);
+      emitTrackState({
+        muted: isMuted,
+        cameraOff: isCameraOff,
+        isSharingScreen: false,
+      });
     }
-  }, [isSharingScreen]);
+  }, [isSharingScreen, isMuted, isCameraOff, emitTrackState]);
 
   /* Socket subscriptions */
   const { token } = useAuth();
@@ -579,9 +610,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const onPeerTrackState = (data: {
       muted: boolean;
       cameraOff: boolean;
+      isSharingScreen?: boolean;
     }) => {
       setPeerMuted(!!data.muted);
       setPeerCameraOff(!!data.cameraOff);
+      setPeerSharingScreen(!!data.isSharingScreen);
     };
     const onRestartOffer = async (data: {
       callSessionId: string;
@@ -655,6 +688,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       isSharingScreen,
       peerMuted,
       peerCameraOff,
+      peerSharingScreen,
       callDurationSec,
       quality,
       error,
@@ -679,6 +713,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       isSharingScreen,
       peerMuted,
       peerCameraOff,
+      peerSharingScreen,
       callDurationSec,
       quality,
       error,

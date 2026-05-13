@@ -58,6 +58,7 @@ type CallContextValue = {
   isCameraOff: boolean;
   peerMuted: boolean;
   peerCameraOff: boolean;
+  peerSharingScreen: boolean;
   callDurationSec: number;
   quality: CallQuality;
   speakerOn: boolean;
@@ -105,6 +106,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [peerMuted, setPeerMuted] = useState(false);
   const [peerCameraOff, setPeerCameraOff] = useState(false);
+  const [peerSharingScreen, setPeerSharingScreen] = useState(false);
   const [callDurationSec, setCallDurationSec] = useState(0);
   const [quality, setQuality] = useState<CallQuality>('unknown');
   const [speakerOn, setSpeakerOn] = useState(false);
@@ -166,6 +168,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setIsCameraOff(false);
     setPeerMuted(false);
     setPeerCameraOff(false);
+    setPeerSharingScreen(false);
     setCallDurationSec(0);
     setQuality('unknown');
     setSpeakerOn(false);
@@ -648,9 +651,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       callSessionId: string;
       muted: boolean;
       cameraOff: boolean;
+      isSharingScreen?: boolean;
     }) => {
       setPeerMuted(!!data.muted);
       setPeerCameraOff(!!data.cameraOff);
+      setPeerSharingScreen(!!data.isSharingScreen);
     };
 
     const onRestartOffer = async (data: {
@@ -744,6 +749,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       isCameraOff,
       peerMuted,
       peerCameraOff,
+      peerSharingScreen,
       callDurationSec,
       quality,
       speakerOn,
@@ -769,6 +775,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       isCameraOff,
       peerMuted,
       peerCameraOff,
+      peerSharingScreen,
       callDurationSec,
       quality,
       speakerOn,

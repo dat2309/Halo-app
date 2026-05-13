@@ -167,38 +167,43 @@ export function ChatThread({ conversationId, peerId, meId }: Props) {
 
       <div className="messages" ref={listRef}>
         {messages.map((m) => {
+          const mine = m.senderId === meId;
           const summary = parseCallSummary(m.content);
           if (summary) {
-            const iAmCaller = summary.callerId === meId;
             const missed = summary.reason === 'missed';
             const declined = summary.reason === 'declined';
             const completed = summary.reason === 'ended';
+            const dangerous = missed || declined;
             const label = missed
-              ? iAmCaller ? 'Missed outgoing call' : 'Missed call'
+              ? mine ? 'Missed outgoing call' : 'Missed call'
               : declined
-                ? iAmCaller ? 'Declined' : 'You declined'
+                ? mine ? 'Declined' : 'You declined'
                 : summary.reason === 'aborted'
                   ? 'Disconnected'
-                  : iAmCaller ? 'Outgoing call' : 'Incoming call';
+                  : mine ? 'Outgoing call' : 'Incoming call';
             const dur = completed
               ? ` · ${Math.floor(summary.durationSec / 60)}:${String(summary.durationSec % 60).padStart(2, '0')}`
               : '';
+            // Render as a regular message bubble — caller's bubble appears on
+            // the right (mine), the other side sees it on the left (theirs).
             return (
-              <div key={m._id} className="msg" style={{ justifyContent: 'center' }}>
+              <div key={m._id} className={`msg ${mine ? 'mine' : 'theirs'}`}>
                 <div
                   className="bubble"
                   style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    color: missed ? '#ef4444' : '#cbd5e1',
-                    fontSize: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontWeight: dangerous ? 600 : 400,
+                    color: dangerous ? '#ef4444' : undefined,
                   }}
                 >
-                  {summary.mode === 'audio' ? '📞' : '📹'} {label}{dur}
+                  <span>{summary.mode === 'audio' ? '📞' : '📹'}</span>
+                  <span>{label}{dur}</span>
                 </div>
               </div>
             );
           }
-          const mine = m.senderId === meId;
           return (
             <div key={m._id} className={`msg ${mine ? 'mine' : 'theirs'}`}>
               <div className="bubble">{m.content}</div>

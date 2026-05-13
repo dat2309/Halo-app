@@ -56,6 +56,26 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return !!room && room.size > 0;
   }
 
+  /**
+   * After a call ends, push the system-style summary message to participants
+   * so their chat thread updates without a manual refetch.
+   */
+  private emitCallSummary(
+    summary: {
+      message: any;
+      conversation: any;
+      participantIds: string[];
+    } | null
+  ) {
+    if (!summary) return;
+    this.emitToUsers(summary.participantIds, "chat:message", summary.message);
+    this.emitToUsers(
+      summary.participantIds,
+      "chat:conversation_updated",
+      summary.conversation
+    );
+  }
+
   /* --------------------------- Connection ----------------------------- */
 
   async handleConnection(client: Socket) {
@@ -87,15 +107,17 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(`User ${userId} disconnected (socket ${client.id})`);
       // If user has no more sockets, abort any active calls they own
       if (!this.isUserOnline(userId)) {
-        this.callService.abortActiveCallsForUser(userId).then((sessions) => {
-          sessions.forEach((s) => {
-            const peer = s.callerId.toString() === userId
-              ? s.calleeId.toString()
-              : s.callerId.toString();
+        this.callService.abortActiveCallsForUser(userId).then((results) => {
+          results.forEach(({ session, summary }) => {
+            const peer =
+              session.callerId.toString() === userId
+                ? session.calleeId.toString()
+                : session.callerId.toString();
             this.emitToUser(peer, "call:ended", {
-              callSessionId: s._id.toString(),
+              callSessionId: session._id.toString(),
               reason: "peer_disconnected",
             });
+            this.emitCallSummary(summary);
           });
         });
       }
@@ -306,10 +328,14 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!session) return;
     if (session.calleeId.toString() !== userId) return;
 
-    await this.callService.markEnded(data.callSessionId, "declined");
+    const { summary } = await this.callService.markEnded(
+      data.callSessionId,
+      "declined"
+    );
     this.emitToUser(session.callerId.toString(), "call:declined", {
       callSessionId: data.callSessionId,
     });
+    this.emitCallSummary(summary);
   }
 
   @SubscribeMessage("call:end")
@@ -324,12 +350,16 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const calleeId = session.calleeId.toString();
     if (userId !== callerId && userId !== calleeId) return;
 
-    await this.callService.markEnded(data.callSessionId, "ended");
+    const { summary } = await this.callService.markEnded(
+      data.callSessionId,
+      "ended"
+    );
     const peerId = userId === callerId ? calleeId : callerId;
     this.emitToUser(peerId, "call:ended", {
       callSessionId: data.callSessionId,
       reason: "ended",
     });
+    this.emitCallSummary(summary);
   }
 
   @SubscribeMessage("call:ice")
@@ -364,6 +394,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       callSessionId: string;
       muted?: boolean;
       cameraOff?: boolean;
+      isSharingScreen?: boolean;
     }
   ) {
     const userId = client.data.userId as string;
@@ -378,6 +409,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       callSessionId: data.callSessionId,
       muted: !!data.muted,
       cameraOff: !!data.cameraOff,
+      isSharingScreen: !!data.isSharingScreen,
     });
   }
 
