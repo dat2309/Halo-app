@@ -1,6 +1,8 @@
 name: Keep Render Awake
 
 on:
+  workflow_dispatch:
+
   schedule:
     - cron: "*/5 * * * *"
 
@@ -10,4 +12,4 @@ jobs:
 
     steps:
       - name: Ping Render API
-        run: curl https://halo-app-twrt.onrender.com/api/health
+        run: curl --silent --fail https://halo-app-twrt.onrender.com/api/health
