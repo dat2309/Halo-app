@@ -1,0 +1,81 @@
+# Halo Web — Test client for chat & video call
+
+Tối giản React + Vite app để test 2 tính năng chính qua **trình duyệt thay vì mobile**:
+
+- Login bằng email/phone + password
+- Chat 1-1 với danh sách conversation + thread realtime
+- Video call 1-1 (WebRTC native trình duyệt, signaling qua Socket.IO)
+
+Hữu ích khi:
+- Test với 2 user mà không cần 2 thiết bị thật
+- Debug WebRTC nhanh (DevTools, `chrome://webrtc-internals`)
+- Demo flow chat/call cho team không cài app mobile
+
+## Yêu cầu
+
+- Node 20+, pnpm hoặc npm
+- Backend chạy ở `http://localhost:3003/api` (hoặc đổi qua env)
+
+## Setup
+
+```bash
+cd halo_web
+pnpm install        # (hoặc npm install)
+cp .env.example .env
+# Sửa VITE_API_URL nếu backend không ở port mặc định
+pnpm dev
+```
+
+Mở http://localhost:5173 — đăng nhập với account đã tồn tại trên backend.
+
+## Test gọi giữa 2 trình duyệt
+
+1. Mở 2 cửa sổ Chrome — 1 cửa sổ Normal, 1 cửa sổ **Incognito** (để có 2 phiên đăng nhập độc lập, không share localStorage)
+2. Login 2 user khác nhau ở 2 cửa sổ
+3. Chọn 1 conversation cùng kết bạn nhau
+4. Bấm **📹 Call** ở cửa sổ A → cửa sổ B sẽ thấy modal "Incoming call" với nút Accept/Decline
+5. Cả 2 cửa sổ hiển thị video — webcam laptop dùng chung nhưng 2 stream độc lập
+
+## Test gọi web ↔ mobile
+
+1. Login user A trên web (browser)
+2. Login user B trên app mobile (custom dev client đã build)
+3. Đảm bảo 2 user đã add friend nhau
+4. Một bên start call → bên còn lại nhận ringing → accept → video 2 chiều
+
+## Debug
+
+- DevTools Console: log đầy đủ `[Socket] connected`, `[ICE local] candidate:... typ relay ...`, `[PC state] ...`
+- `chrome://webrtc-internals` — Chrome built-in tool xem chi tiết peer connection, ICE candidates, RTP stats
+- Network tab → WebSocket frames thấy socket events `chat:send`, `call:invite`, etc.
+
+## Kiến trúc
+
+```
+src/
+├── App.tsx               # Auth gate + providers
+├── main.tsx              # Vite entry
+├── lib/
+│   ├── api.ts            # axios + JWT interceptor + localStorage token
+│   ├── auth.tsx          # AuthProvider, useAuth, login/logout
+│   ├── socket.ts         # Socket.IO client singleton
+│   └── call.tsx          # CallProvider — WebRTC peer connection + signaling
+├── pages/
+│   ├── Login.tsx
+│   └── Chat.tsx          # 2-column layout (list + thread)
+└── components/
+    ├── ConversationList.tsx
+    ├── ChatThread.tsx
+    └── CallOverlay.tsx   # Full-screen modal khi đang call
+```
+
+## Hạn chế đã biết
+
+- Chỉ chat **text** — không gửi ảnh/video (đủ cho test signaling)
+- Không có register UI — phải tạo user qua app mobile hoặc Swagger UI
+- Không support push notification (browser tab phải đang mở để nhận `call:incoming`)
+- Permissions: Chrome sẽ hỏi quyền camera/mic lần đầu start call. Trên `http://` ngoài `localhost` thì Chrome có thể block — dùng `localhost` hoặc deploy HTTPS
+
+## Cleanup
+
+Web không tạo data riêng — mọi conversation/message/call đều dùng chung backend Mongo với app mobile. Đăng xuất chỉ xoá localStorage token.

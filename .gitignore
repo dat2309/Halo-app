@@ -1,0 +1,70 @@
+# =============================================================================
+# Halo workspace — root .gitignore
+# Defensive monorepo defaults so secrets/builds never sneak into any commit,
+# regardless of which subfolder you're in (backend/, halo_app/, halo_web/).
+# Subprojects also have their own .gitignore for stricter rules.
+# =============================================================================
+
+# ---- OS / editor ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+
+# ---- Env files (NEVER commit) ----------------------------------------------
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ---- Node / package managers -----------------------------------------------
+node_modules/
+**/node_modules/
+.pnpm-store/
+**/.pnpm-store/
+.yarn/
+.npm/
+package-lock.json.bak
+
+# ---- Build outputs ---------------------------------------------------------
+**/dist/
+**/build/
+**/out/
+**/.next/
+**/.turbo/
+**/.cache/
+**/coverage/
+*.tsbuildinfo
+
+# ---- Logs ------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- Uploads (local file storage may contain user data) --------------------
+**/uploads/
+
+# ---- AI tool caches --------------------------------------------------------
+.claude/
+.qodo/
+.cursor/
+
+# ---- Misc ------------------------------------------------------------------
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision
+.env.backup

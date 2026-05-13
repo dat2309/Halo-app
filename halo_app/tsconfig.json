@@ -1,0 +1,31 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@env": ["./src/lib/env.js"]
+    },
+    "esModuleInterop": true,
+    "checkJs": true
+  },
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "docs",
+    "cli",
+    "android",
+    "ios",
+    "lint-staged.config.js"
+  ],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}
