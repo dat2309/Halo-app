@@ -38,10 +38,8 @@ export function CallOverlay() {
     remoteStream,
     isMuted,
     isCameraOff,
-    isSharingScreen,
     peerMuted,
     peerCameraOff,
-    peerSharingScreen,
     callDurationSec,
     quality,
     error,
@@ -50,7 +48,6 @@ export function CallOverlay() {
     endCall,
     toggleMute,
     toggleCamera,
-    toggleScreenShare,
   } = useCall();
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -86,39 +83,23 @@ export function CallOverlay() {
     active: '',
   };
 
-  // Show remote video whenever peer has a track active — even if their camera
-  // is off but they're sharing screen, we want to render the screen frames.
   const showRemoteVideo =
-    mode === 'video' &&
-    !!remoteStream &&
-    status === 'active' &&
-    (!peerCameraOff || peerSharingScreen);
-
-  // Hide the local self-view when we're sharing screen — it would still show
-  // the camera (which peer can't see), causing confusion. Use "contain" object-fit
-  // so screen captures aren't clipped on the receiver side.
+    mode === 'video' && !!remoteStream && status === 'active' && !peerCameraOff;
   const showLocalSelfView =
     mode === 'video' &&
     status !== 'incoming_ringing' &&
     !!localStream &&
-    !isCameraOff &&
-    !isSharingScreen;
+    !isCameraOff;
 
   return (
     <div className="call-overlay">
-      {/* Remote VIDEO — always mounted so srcObject stays attached.
-          When peer is sharing screen, switch object-fit to 'contain' so
-          presentations / wide screens aren't cropped. */}
+      {/* Remote VIDEO — always mounted so srcObject stays attached. */}
       <video
         ref={remoteVideoRef}
         autoPlay
         playsInline
         className="remote"
-        style={{
-          display: showRemoteVideo ? 'block' : 'none',
-          objectFit: peerSharingScreen ? 'contain' : 'cover',
-          background: peerSharingScreen ? '#000' : undefined,
-        }}
+        style={{ display: showRemoteVideo ? 'block' : 'none' }}
       />
 
       {/* Remote AUDIO — for audio-only mode; always mounted so the stream
@@ -145,33 +126,6 @@ export function CallOverlay() {
             {formatDuration(callDurationSec)}
           </span>
           {peerMuted && <span style={{ color: '#ef4444' }}>🔇</span>}
-          {peerSharingScreen && (
-            <span style={{ color: '#facc15', fontWeight: 600 }}>
-              🖥 Peer sharing
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* "You're sharing" overlay near top so the sharer knows */}
-      {isSharingScreen && status === 'active' && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 80,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '6px 14px',
-            borderRadius: 16,
-            background: 'rgba(250, 204, 21, 0.2)',
-            border: '1px solid #facc15',
-            color: '#facc15',
-            fontSize: 13,
-            fontWeight: 600,
-            zIndex: 3,
-          }}
-        >
-          🖥 You are sharing your screen
         </div>
       )}
 
@@ -203,11 +157,6 @@ export function CallOverlay() {
             {mode === 'video' && (
               <button onClick={toggleCamera}>
                 {isCameraOff ? '📷 Camera on' : '🎥 Camera off'}
-              </button>
-            )}
-            {mode === 'video' && (
-              <button onClick={toggleScreenShare}>
-                {isSharingScreen ? '🛑 Stop sharing' : '🖥 Share screen'}
               </button>
             )}
             <button className="btn-red" onClick={endCall}>

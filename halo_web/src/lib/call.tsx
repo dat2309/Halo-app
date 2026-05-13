@@ -46,10 +46,8 @@ type CallContextValue = {
   remoteStream: MediaStream | null;
   isMuted: boolean;
   isCameraOff: boolean;
-  isSharingScreen: boolean;
   peerMuted: boolean;
   peerCameraOff: boolean;
-  peerSharingScreen: boolean;
   callDurationSec: number;
   quality: CallQuality;
   error: string | null;
@@ -59,7 +57,6 @@ type CallContextValue = {
   endCall: () => void;
   toggleMute: () => void;
   toggleCamera: () => void;
-  toggleScreenShare: () => Promise<void>;
 };
 
 const CallContext = createContext<CallContextValue | null>(null);
@@ -89,18 +86,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
-  const [isSharingScreen, setIsSharingScreen] = useState(false);
   const [peerMuted, setPeerMuted] = useState(false);
   const [peerCameraOff, setPeerCameraOff] = useState(false);
-  const [peerSharingScreen, setPeerSharingScreen] = useState(false);
   const [callDurationSec, setCallDurationSec] = useState(0);
   const [quality, setQuality] = useState<CallQuality>('unknown');
   const [error, setError] = useState<string | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const cameraVideoTrackRef = useRef<MediaStreamTrack | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const pendingRemoteIceRef = useRef<RTCIceCandidateInit[]>([]);
   const remoteSetRef = useRef(false);
@@ -140,12 +133,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
     }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((t) => t.stop());
-    }
     localStreamRef.current = null;
-    cameraVideoTrackRef.current = null;
-    screenStreamRef.current = null;
     setLocalStream(null);
     setRemoteStream(null);
     setStatus('idle');
@@ -155,10 +143,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setMode('video');
     setIsMuted(false);
     setIsCameraOff(false);
-    setIsSharingScreen(false);
     setPeerMuted(false);
     setPeerCameraOff(false);
-    setPeerSharingScreen(false);
     setCallDurationSec(0);
     setQuality('unknown');
     pendingIceRef.current = [];
@@ -326,9 +312,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         const stream = await getLocalMedia(callMode);
         const pc = buildPeerConnection(iceServers);
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-        // Cache camera track ref so we can swap back from screen share
-        const vTrack = stream.getVideoTracks()[0];
-        if (vTrack) cameraVideoTrackRef.current = vTrack;
 
         const offer = await pc.createOffer({});
         await pc.setLocalDescription(offer);
@@ -374,8 +357,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const stream = await getLocalMedia(modeRef.current);
       const pc = buildPeerConnection(iceServers);
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-      const vTrack = stream.getVideoTracks()[0];
-      if (vTrack) cameraVideoTrackRef.current = vTrack;
 
       await pc.setRemoteDescription({ type: 'offer', sdp: incoming.offerSdp });
       remoteSetRef.current = true;
@@ -418,11 +399,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [cleanup]);
 
   const emitTrackState = useCallback(
-    (next: {
-      muted: boolean;
-      cameraOff: boolean;
-      isSharingScreen: boolean;
-    }) => {
+    (next: { muted: boolean; cameraOff: boolean }) => {
       const sid = callSessionIdRef.current;
       const socket = getSocket();
       if (!sid || !socket) return;
@@ -437,12 +414,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const newMuted = !isMuted;
     s.getAudioTracks().forEach((t) => (t.enabled = !newMuted));
     setIsMuted(newMuted);
-    emitTrackState({
-      muted: newMuted,
-      cameraOff: isCameraOff,
-      isSharingScreen,
-    });
-  }, [isMuted, isCameraOff, isSharingScreen, emitTrackState]);
+    emitTrackState({ muted: newMuted, cameraOff: isCameraOff });
+  }, [isMuted, isCameraOff, emitTrackState]);
 
   const toggleCamera = useCallback(() => {
     const s = localStreamRef.current;
@@ -450,72 +423,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const newOff = !isCameraOff;
     s.getVideoTracks().forEach((t) => (t.enabled = !newOff));
     setIsCameraOff(newOff);
-    emitTrackState({
-      muted: isMuted,
-      cameraOff: newOff,
-      isSharingScreen,
-    });
-  }, [isCameraOff, isMuted, isSharingScreen, emitTrackState]);
-
-  /**
-   * Replace the outgoing video track with a screen capture (getDisplayMedia).
-   * On "Stop sharing" from browser UI, the track emits `ended` → restore camera.
-   */
-  const toggleScreenShare = useCallback(async () => {
-    const pc = pcRef.current;
-    if (!pc) return;
-    const videoSender = pc
-      .getSenders()
-      .find((s) => s.track && s.track.kind === 'video');
-    if (!videoSender) return;
-
-    if (!isSharingScreen) {
-      try {
-        const screen = await (navigator.mediaDevices as any).getDisplayMedia({
-          video: true,
-          audio: false,
-        });
-        screenStreamRef.current = screen as MediaStream;
-        const screenTrack = (screen as MediaStream).getVideoTracks()[0];
-        if (!screenTrack) return;
-        await videoSender.replaceTrack(screenTrack);
-        setIsSharingScreen(true);
-        emitTrackState({
-          muted: isMuted,
-          cameraOff: isCameraOff,
-          isSharingScreen: true,
-        });
-        screenTrack.onended = async () => {
-          // User stopped sharing via browser UI (the "Stop sharing" pill)
-          const cam = cameraVideoTrackRef.current;
-          if (cam) await videoSender.replaceTrack(cam);
-          setIsSharingScreen(false);
-          screenStreamRef.current = null;
-          emitTrackState({
-            muted: isMuted,
-            cameraOff: isCameraOff,
-            isSharingScreen: false,
-          });
-        };
-      } catch (e: any) {
-        // User cancelled the picker — not an error
-        console.log('[Call] screen share canceled/failed:', e?.message);
-      }
-    } else {
-      const cam = cameraVideoTrackRef.current;
-      if (cam) await videoSender.replaceTrack(cam);
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      setIsSharingScreen(false);
-      emitTrackState({
-        muted: isMuted,
-        cameraOff: isCameraOff,
-        isSharingScreen: false,
-      });
-    }
-  }, [isSharingScreen, isMuted, isCameraOff, emitTrackState]);
+    emitTrackState({ muted: isMuted, cameraOff: newOff });
+  }, [isCameraOff, isMuted, emitTrackState]);
 
   /* Socket subscriptions */
   const { token } = useAuth();
@@ -610,11 +519,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const onPeerTrackState = (data: {
       muted: boolean;
       cameraOff: boolean;
-      isSharingScreen?: boolean;
     }) => {
       setPeerMuted(!!data.muted);
       setPeerCameraOff(!!data.cameraOff);
-      setPeerSharingScreen(!!data.isSharingScreen);
     };
     const onRestartOffer = async (data: {
       callSessionId: string;
@@ -685,10 +592,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       remoteStream,
       isMuted,
       isCameraOff,
-      isSharingScreen,
       peerMuted,
       peerCameraOff,
-      peerSharingScreen,
       callDurationSec,
       quality,
       error,
@@ -698,7 +603,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       endCall,
       toggleMute,
       toggleCamera,
-      toggleScreenShare,
     }),
     [
       status,
@@ -710,10 +614,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       remoteStream,
       isMuted,
       isCameraOff,
-      isSharingScreen,
       peerMuted,
       peerCameraOff,
-      peerSharingScreen,
       callDurationSec,
       quality,
       error,
@@ -723,7 +625,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       endCall,
       toggleMute,
       toggleCamera,
-      toggleScreenShare,
     ]
   );
 

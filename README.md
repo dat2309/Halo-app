@@ -10,7 +10,7 @@ Một mini social app full-stack — gồm **mobile app** (iOS/Android), **backe
 | **Feed** | Posts với ảnh/video, comments nested, reactions, infinite scroll, realtime updates |
 | **Friends** | Search theo name/username (partial match), gửi/accept/decline request, unfriend |
 | **Chat 1-1** | Text messaging realtime qua Socket.IO, typing indicator, read receipts, unread badge |
-| **Video/Audio Call** | WebRTC peer-to-peer, signaling qua Socket.IO, ICE restart, call quality bars, missed call log, screen share (web) |
+| **Video/Audio Call** | WebRTC peer-to-peer, signaling qua Socket.IO, ICE restart, call quality bars, missed call log |
 | **Calendar** | CRUD events với màu sắc, reminder, monthly summary, upcoming events |
 | **Finance** | Income/expense, OCR scan hoá đơn (ML Kit), category pie chart, yearly bar chart |
 | **Upload** | Cloudinary CDN cho ảnh/video, auto-transcode video, public_id tracking |
@@ -152,7 +152,7 @@ Chi tiết thêm xem README của từng subproject:
 
 ### Web test client
 - **Framework**: React 18 + Vite 5 + TypeScript
-- **WebRTC**: browser native (`RTCPeerConnection`, `getUserMedia`, `getDisplayMedia`)
+- **WebRTC**: browser native (`RTCPeerConnection`, `getUserMedia`)
 - **HTTP**: axios
 - **Socket**: socket.io-client
 

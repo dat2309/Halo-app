@@ -394,7 +394,6 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       callSessionId: string;
       muted?: boolean;
       cameraOff?: boolean;
-      isSharingScreen?: boolean;
     }
   ) {
     const userId = client.data.userId as string;
@@ -409,7 +408,6 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       callSessionId: data.callSessionId,
       muted: !!data.muted,
       cameraOff: !!data.cameraOff,
-      isSharingScreen: !!data.isSharingScreen,
     });
   }
 
